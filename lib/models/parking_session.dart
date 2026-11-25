@@ -3,18 +3,23 @@ import 'bounding_box.dart';
 
 enum SessionStatus { active, done, rejected }
 
-/// Satu tiket parkir (dari masuk sampai keluar / ditolak).
-/// Model ini dibuat di sisi aplikasi untuk menampilkan Parkir Aktif,
-/// Riwayat, dan Detail Tiket dari hasil scan backend.
+/// Satu sesi verifikasi kendaraan (dari masuk hingga keluar / alarm).
 class ParkingSession {
-  ParkingSession({required this.id, required this.plate, required this.entryTime, this.status = SessionStatus.active});
+  ParkingSession({
+    required this.id,
+    required this.plate,
+    required this.entryTime,
+    this.status = SessionStatus.active,
+  });
 
   final String id;
   String plate;
+  String? detectedPlate;
+  String? mismatchType;
   SessionStatus status;
   int seq = 0;
 
-  // masuk
+  // Masuk
   DateTime entryTime;
   bool entryKnown = true;
   String? entryImage;
@@ -22,7 +27,7 @@ class ParkingSession {
   Size? entrySize;
   double? entryPlateScore;
 
-  // keluar / percobaan keluar
+  // Keluar / insiden alarm
   DateTime? exitTime;
   String? exitImage;
   List<BoundingBox> exitBoxes = const [];
@@ -36,7 +41,4 @@ class ParkingSession {
 
   Duration? get duration => (exitTime != null && entryKnown) ? exitTime!.difference(entryTime) : null;
   DateTime get closedAt => exitTime ?? entryTime;
-
-  /// PLACEHOLDER: backend belum mengirim lokasi slot, jadi dibuat dari nomor urut.
-  String get slotLabel => 'Lantai ${seq % 2 + 1} • A-${(seq % 20 + 1).toString().padLeft(2, '0')}';
 }

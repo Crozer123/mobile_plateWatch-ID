@@ -3,9 +3,7 @@ import 'package:flutter/material.dart';
 import '../core/app_colors.dart';
 import '../models/bounding_box.dart';
 
-/// Menggambar bounding box hasil deteksi di atas foto.
-/// Koordinat boleh piksel (butuh [imageSize]) atau ternormalisasi 0..1.
-/// Foto diasumsikan ditampilkan dengan BoxFit.cover.
+/// Menggambar bounding box hasil deteksi dengan palet Strawberry Jam (wajah) & Peach Sorbet (plat).
 class BBoxPointer extends StatelessWidget {
   final List<BoundingBox> boxes;
   final Size? imageSize;
@@ -23,11 +21,11 @@ class _BoxPainter extends CustomPainter {
   final Size? img;
   _BoxPainter(this.boxes, this.img);
 
-  Color _color(String label) {
+  (Color boxColor, Color textColor) _palette(String label) {
     final l = label.toLowerCase();
-    if (l.contains('face') || l.contains('wajah')) return AppColors.pink;
-    if (l.contains('plate') || l.contains('plat')) return const Color(0xFF4FC3F7);
-    return AppColors.warning;
+    if (l.contains('face') || l.contains('wajah')) return (AppColors.primary, Colors.white);
+    if (l.contains('plate') || l.contains('plat')) return (AppColors.peach, AppColors.textDark);
+    return (AppColors.butter, AppColors.textDark);
   }
 
   @override
@@ -50,29 +48,29 @@ class _BoxPainter extends CustomPainter {
       } else if (normalized) {
         r = Rect.fromLTRB(x1 * size.width, y1 * size.height, x2 * size.width, y2 * size.height);
       } else {
-        continue; // piksel tanpa ukuran gambar -> tidak bisa dipetakan
+        continue;
       }
 
-      final color = _color(b.label);
+      final (color, textColor) = _palette(b.label);
       canvas.drawRRect(
-        RRect.fromRectAndRadius(r, const Radius.circular(6)),
+        RRect.fromRectAndRadius(r, const Radius.circular(10)),
         Paint()
           ..color = color
           ..style = PaintingStyle.stroke
-          ..strokeWidth = 2.5,
+          ..strokeWidth = 2.8,
       );
 
       final conf = b.confidence <= 1 ? b.confidence * 100 : b.confidence;
       final tp = TextPainter(
         text: TextSpan(
           text: '${b.label} ${conf.round()}%',
-          style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.w700),
+          style: TextStyle(color: textColor, fontSize: 9.5, fontWeight: FontWeight.w800),
         ),
         textDirection: TextDirection.ltr,
       )..layout();
-      final labelRect = Rect.fromLTWH(r.left, math.max(0, r.top - tp.height - 4), tp.width + 8, tp.height + 4);
-      canvas.drawRRect(RRect.fromRectAndRadius(labelRect, const Radius.circular(4)), Paint()..color = color);
-      tp.paint(canvas, labelRect.topLeft + const Offset(4, 2));
+      final labelRect = Rect.fromLTWH(r.left, math.max(0, r.top - tp.height - 6), tp.width + 10, tp.height + 4);
+      canvas.drawRRect(RRect.fromRectAndRadius(labelRect, const Radius.circular(999)), Paint()..color = color);
+      tp.paint(canvas, labelRect.topLeft + const Offset(5, 2));
     }
   }
 

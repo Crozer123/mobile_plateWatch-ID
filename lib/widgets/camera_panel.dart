@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import '../core/app_colors.dart';
 import '../core/app_theme.dart';
 
-/// Kotak kamera/foto dengan label, sudut bracket, dan status di bawahnya.
+/// Kotak kamera/foto dengan sudut bracket bulat dan status pastel harmonis.
 class CameraPanel extends StatelessWidget {
   final String camLabel;
   final String caption;
@@ -25,29 +25,35 @@ class CameraPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = ok ? AppColors.success : AppColors.warning;
+    final fg = ok ? AppColors.success : AppColors.warning;
+    final bg = ok ? AppColors.successBg : AppColors.warningBg;
+    final br = ok ? AppColors.successBorder : AppColors.warningBorder;
     return Column(children: [
       AspectRatio(
         aspectRatio: 1.05,
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(16),
+        child: Container(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: AppColors.border, width: 2),
+          ),
+          clipBehavior: Clip.antiAlias,
           child: Stack(fit: StackFit.expand, children: [
             preview ??
                 Container(
-                  decoration: const BoxDecoration(
-                    gradient: LinearGradient(
-                        begin: Alignment.topLeft, end: Alignment.bottomRight, colors: [Color(0xFF1E3A4C), Color(0xFF0B1C27)]),
-                  ),
-                  child: Icon(icon, size: 48, color: Colors.white24),
+                  color: AppColors.cameraBg,
+                  child: Icon(icon, size: 48, color: AppColors.border.withValues(alpha: .35)),
                 ),
             if (overlay != null) overlay!,
-            CustomPaint(painter: BracketPainter(color: ok ? Colors.white70 : AppColors.warning)),
+            CustomPaint(painter: BracketPainter(color: ok ? AppColors.elevated : AppColors.peach)),
             Positioned(
               left: 8,
               top: 8,
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-                decoration: BoxDecoration(color: Colors.black54, borderRadius: BorderRadius.circular(8)),
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: AppColors.cameraSurface.withValues(alpha: .88),
+                  borderRadius: BorderRadius.circular(999),
+                ),
                 child: Text(camLabel, style: AppTheme.mono(size: 9, color: Colors.white)),
               ),
             ),
@@ -57,9 +63,13 @@ class CameraPanel extends StatelessWidget {
               right: 0,
               child: Center(
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
-                  decoration: BoxDecoration(color: Colors.white.withOpacity(.92), borderRadius: BorderRadius.circular(10)),
-                  child: Text(caption, style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w600)),
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: AppColors.elevated,
+                    borderRadius: BorderRadius.circular(999),
+                    border: Border.all(color: AppColors.border, width: 1.5),
+                  ),
+                  child: Text(caption, style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: AppColors.textDark)),
                 ),
               ),
             ),
@@ -69,15 +79,17 @@ class CameraPanel extends StatelessWidget {
       const SizedBox(height: 8),
       Container(
         width: double.infinity,
-        padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 6),
-        decoration: BoxDecoration(color: color.withOpacity(.12), borderRadius: BorderRadius.circular(12)),
+        padding: const EdgeInsets.symmetric(vertical: 7, horizontal: 8),
+        decoration: BoxDecoration(
+          color: bg,
+          borderRadius: BorderRadius.circular(999),
+          border: Border.all(color: br, width: 1.5),
+        ),
         child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-          Icon(ok ? Icons.check_circle_rounded : Icons.error_rounded, size: 14, color: color),
+          Icon(ok ? Icons.check_circle_rounded : Icons.error_rounded, size: 14, color: fg),
           const SizedBox(width: 5),
           Flexible(
-            child: Text(statusText,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: color)),
+            child: Text(statusText, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: fg)),
           ),
         ]),
       ),
@@ -85,7 +97,7 @@ class CameraPanel extends StatelessWidget {
   }
 }
 
-/// Preview kamera yang memenuhi kotak (cover).
+/// Preview kamera yang memenuhi bingkai (backing cokelat hangat).
 class CameraView extends StatelessWidget {
   final CameraController? controller;
   final String? error;
@@ -98,12 +110,12 @@ class CameraView extends StatelessWidget {
     if (error != null) {
       child = Center(
         child: Padding(
-          padding: const EdgeInsets.all(10),
-          child: Text(error!, textAlign: TextAlign.center, style: const TextStyle(color: Colors.white70, fontSize: 11)),
+          padding: const EdgeInsets.all(16),
+          child: Text(error!, textAlign: TextAlign.center, style: AppTheme.body(size: 12.5, color: AppColors.card)),
         ),
       );
     } else if (c == null || !c.value.isInitialized) {
-      child = const Center(child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white54));
+      child = const Center(child: CircularProgressIndicator(strokeWidth: 2.5, color: AppColors.primary));
     } else {
       final size = c.value.previewSize!;
       child = ClipRect(
@@ -113,7 +125,7 @@ class CameraView extends StatelessWidget {
         ),
       );
     }
-    return Container(color: const Color(0xFF0B1C27), child: child);
+    return Container(color: AppColors.cameraBg, child: child);
   }
 }
 
@@ -128,8 +140,9 @@ class BracketPainter extends CustomPainter {
     final p = Paint()
       ..color = color
       ..style = PaintingStyle.stroke
-      ..strokeWidth = 2.5
-      ..strokeCap = StrokeCap.round;
+      ..strokeWidth = 3.0
+      ..strokeCap = StrokeCap.round
+      ..strokeJoin = StrokeJoin.round;
     final m = inset, l = len;
     final r = Rect.fromLTRB(m, m + 8, size.width - m, size.height - m - 8);
     final corners = [

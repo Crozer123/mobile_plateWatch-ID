@@ -4,15 +4,14 @@ import 'package:flutter/material.dart';
 import '../core/app_colors.dart';
 import '../models/bounding_box.dart';
 
-/// Memotong bagian foto sesuai bounding box (mis. hanya wajah / hanya plat).
-/// Jika box tidak ditemukan, seluruh foto ditampilkan.
+/// Memotong bagian foto sesuai bounding box (mis. hanya wajah / hanya plat) bergaya stiker polaroid.
 class BoxCrop extends StatefulWidget {
   final String path;
   final List<BoundingBox> boxes;
-  final List<String> labelKeys; // mis. ['face','wajah']
+  final List<String> labelKeys;
   final String? caption;
   final double aspectRatio;
-  final double padding; // tambahan ruang di sekitar box (0.3 = 30%)
+  final double padding;
   const BoxCrop({
     super.key,
     required this.path,
@@ -68,10 +67,15 @@ class _BoxCropState extends State<BoxCrop> {
     final img = _img;
     return AspectRatio(
       aspectRatio: widget.aspectRatio,
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(16),
+      child: Container(
+        decoration: BoxDecoration(
+          color: AppColors.cameraBg,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: AppColors.border, width: 2),
+          boxShadow: const [BoxShadow(color: AppColors.cardShadow, offset: Offset(0, 3), blurRadius: 0)],
+        ),
+        clipBehavior: Clip.antiAlias,
         child: Stack(fit: StackFit.expand, children: [
-          Container(color: const Color(0xFF16303F)),
           if (img != null) CustomPaint(painter: _CropPainter(img, _srcRect(img), widget.aspectRatio)),
           if (widget.caption != null)
             Positioned(
@@ -80,10 +84,16 @@ class _BoxCropState extends State<BoxCrop> {
               right: 8,
               child: Center(
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
-                  decoration: BoxDecoration(color: Colors.white.withOpacity(.92), borderRadius: BorderRadius.circular(10)),
-                  child: Text(widget.caption!,
-                      style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: AppColors.textDark)),
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: AppColors.elevated,
+                    borderRadius: BorderRadius.circular(999),
+                    border: Border.all(color: AppColors.border, width: 1.5),
+                  ),
+                  child: Text(
+                    widget.caption!,
+                    style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: AppColors.textDark),
+                  ),
                 ),
               ),
             ),
@@ -104,7 +114,7 @@ class _CropPainter extends CustomPainter {
     final iw = img.width.toDouble(), ih = img.height.toDouble();
     var w = rect.width, h = rect.height;
     if (w / h > aspect) {
-      h = w / aspect; // sumber lebih lebar -> tambah tinggi
+      h = w / aspect;
     } else {
       w = h * aspect;
     }

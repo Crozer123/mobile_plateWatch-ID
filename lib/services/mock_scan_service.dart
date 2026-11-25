@@ -1,13 +1,6 @@
 import '../models/parking_record.dart';
 
-/// Balasan PALSU pengganti backend, hanya untuk uji alur & tampilan.
-/// Aktif jika kUseMockScan = true (core/demo_data.dart).
-///
-/// Urutan skenario (berputar tiap kali menekan scan / memilih foto):
-///  1. Plat B 4821 SKA, sukses       -> belum terdaftar    => MASUK berhasil
-///  2. Plat B 4821 SKA, sukses       -> sudah terdaftar    => KELUAR cocok
-///  3-5. Plat B 3021 KLD, wajah tertutup -> coba ulang 3x  => konfirmasi petugas
-///  6. Plat B 6912 PZX, wajah beda   -> (terdaftar di data demo) => ALARM
+/// Balasan simulasi cadangan jika `kUseMockScan = true`.
 class MockScanService {
   static int _n = 0;
 
@@ -15,36 +8,59 @@ class MockScanService {
       {'label': label, 'confidence': conf, 'x1': x1, 'y1': y1, 'x2': x2, 'y2': y2};
 
   static Future<ParkingRecord?> scan(String imagePath) async {
-    await Future.delayed(const Duration(milliseconds: 900));
-    final i = _n++ % 6;
+    await Future.delayed(const Duration(milliseconds: 600));
+    final i = _n++ % 5;
     final now = DateTime.now().toIso8601String();
+    final plateBox = _box('plate', .99, .28, .62, .72, .78);
 
-    final plateBox = _box('plate', .991, .28, .62, .72, .78);
     Map<String, dynamic> json;
     switch (i) {
       case 0:
-      case 1:
         json = {
           'timestamp': now,
-          'status': 'SUCCESS',
+          'gate_mode': 'IN',
+          'status': 'ENTRY_SUCCESS',
           'plate_number': 'B 4821 SKA',
           'boxes': [_box('face', .98, .36, .08, .64, .38), plateBox],
         };
+      case 1:
       case 2:
-      case 3:
-      case 4:
         json = {
           'timestamp': now,
-          'status': 'NO_FACE',
-          'plate_number': 'B 3021 KLD',
-          'boxes': [plateBox],
+          'gate_mode': 'OUT',
+          'status': 'MISMATCH_RETRY',
+          'plate_number': 'B 4821 SKA',
+          'registered_plate': 'B 4821 SKA',
+          'mismatch_type': 'FACE_MISMATCH',
+          'attempt': i,
+          'max_attempt': 3,
+          'similarity_score': .41,
+          'message': 'Wajah berbeda! Percobaan $i dari 3.',
+          'boxes': [_box('face', .41, .36, .08, .64, .38), plateBox],
+        };
+      case 3:
+        json = {
+          'timestamp': now,
+          'gate_mode': 'OUT',
+          'status': 'ALARM',
+          'plate_number': 'B 4821 SKA',
+          'registered_plate': 'B 4821 SKA',
+          'mismatch_type': 'FACE_MISMATCH',
+          'attempt': 3,
+          'max_attempt': 3,
+          'similarity_score': .38,
+          'message': 'ALARM! 3x deteksi wajah tidak cocok.',
+          'boxes': [_box('face', .38, .36, .08, .64, .38), plateBox],
         };
       default:
         json = {
           'timestamp': now,
-          'status': 'MISMATCH',
-          'plate_number': 'B 6912 PZX',
-          'boxes': [_box('face', .41, .36, .08, .64, .38), plateBox],
+          'gate_mode': 'OUT',
+          'status': 'EXIT_SUCCESS',
+          'plate_number': 'B 4821 SKA',
+          'registered_plate': 'B 4821 SKA',
+          'similarity_score': .95,
+          'boxes': [_box('face', .95, .36, .08, .64, .38), plateBox],
         };
     }
     return ParkingRecord.fromJson(json);

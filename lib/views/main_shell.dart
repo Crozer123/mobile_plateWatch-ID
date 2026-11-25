@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../services/api_service.dart';
 import '../services/parking_store.dart';
 import '../widgets/app_bottom_nav.dart';
 import 'active_parking_screen.dart';
@@ -14,6 +15,16 @@ class MainShell extends StatefulWidget {
 class _MainShellState extends State<MainShell> {
   int _index = 0;
 
+  void _onTabChanged(int i) {
+    setState(() => _index = i);
+    ParkingStore.instance.setScannerTabActive(i == 0);
+    if (i == 1) {
+      ApiService().fetchDashboard().then((dash) {
+        if (dash != null) ParkingStore.instance.syncFromDashboard(dash);
+      });
+    }
+  }
+
   @override
   Widget build(BuildContext context) => Scaffold(
         body: IndexedStack(index: _index, children: const [
@@ -25,8 +36,8 @@ class _MainShellState extends State<MainShell> {
           listenable: ParkingStore.instance,
           builder: (_, __) => AppBottomNav(
             index: _index,
-            onTap: (i) => setState(() => _index = i),
-            activeCount: ParkingStore.instance.activeCount,
+            onTap: _onTabChanged,
+            activeCount: ParkingStore.instance.sedangDiDalam,
           ),
         ),
       );

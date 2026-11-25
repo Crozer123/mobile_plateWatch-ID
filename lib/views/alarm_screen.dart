@@ -2,13 +2,15 @@ import 'package:flutter/material.dart';
 import '../core/scan_status.dart';
 import '../models/parking_record.dart';
 import '../models/parking_session.dart';
+import '../services/alarm_sound_service.dart';
 import '../services/parking_store.dart';
 import '../widgets/alarm_panel.dart';
 import '../widgets/result_scaffold.dart';
 import '../widgets/scan_images_row.dart';
 
-/// Halaman "Alarm Wajah" - wajah saat keluar tidak sama dengan saat masuk.
-class AlarmScreen extends StatelessWidget {
+/// Halaman "Alarm Aktif" - otomatis membunyikan suara sirine aplikasi ketika
+/// deteksi keluar berbeda wajah atau plat nomor hingga 3x berturut-turut.
+class AlarmScreen extends StatefulWidget {
   final ParkingRecord record;
   final ParkingSession? registered;
   final String imagePath;
@@ -22,33 +24,66 @@ class AlarmScreen extends StatelessWidget {
   });
 
   @override
+  State<AlarmScreen> createState() => _AlarmScreenState();
+}
+
+class _AlarmScreenState extends State<AlarmScreen> {
+  @override
+  void initState() {
+    super.initState();
+    AlarmSoundService.instance.startAlarm();
+  }
+
+  @override
+  void dispose() {
+    AlarmSoundService.instance.stopAlarm();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final record = widget.record;
+    final reg = widget.registered;
     final f = record.faceScore;
     final pct = f == null ? '-' : '${(f * 100).round()}';
-    final reg = registered;
+    final mismatch = record.mismatchType ?? 'FACE_MISMATCH';
+    final isPlateDiff = mismatch == 'PLATE_MISMATCH';
+    final isBothDiff = mismatch == 'FACE_AND_PLATE_MISMATCH';
+    final regPlate = record.registeredPlate ?? reg?.plate ?? record.plateNumber;
+
     return ResultScaffold(
       isEntry: false,
       children: [
         ScanImagesRow(
-          path: imagePath,
+          path: widget.imagePath,
           boxes: record.boxes,
-          faceText: 'Skor: $pct% (Tidak Cocok)',
-          faceOk: false,
-          plateText: reg == null ? record.plateNumber : '${record.plateNumber} • Terdaftar ${ParkingStore.hhmm(reg.entryTime)}',
-          plateOk: true,
+          faceText: isPlateDiff ? 'Skor: $pct% (Cocok)' : 'Skor: $pct% (Berbeda)',
+          faceOk: isPlateDiff,
+          faceFailedMark: !isPlateDiff,
+          plateText: (isPlateDiff || isBothDiff)
+              ? '${record.plateNumber} != $regPlate'
+              : (reg == null ? record.plateNumber : '${record.plateNumber} • Masuk ${ParkingStore.hhmm(reg.entryTime)}'),
+          plateOk: !(isPlateDiff || isBothDiff),
         ),
         const SizedBox(height: 14),
         AlarmPanel(
           registered: reg,
-          currentImage: imagePath,
+          registeredPlate: regPlate,
+          detectedPlate: record.plateNumber,
+          mismatchType: mismatch,
+          currentImage: widget.imagePath,
           currentBoxes: record.boxes,
-          currentSize: imageSize,
+          currentSize: widget.imageSize,
           time: record.time,
           onCallSecurity: () {
-            // TODO: kirim notifikasi ke tim keamanan lewat backend.
-            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Tim keamanan lapangan dihubungi')));
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Peringatan darurat diteruskan ke petugas jaga!')),
+            );
           },
-          onDismiss: () => Navigator.pop(context),
+          onDismiss: () async {
+            await AlarmSoundService.instance.stopAlarm();
+            if (context.mounted) Navigator.pop(context);
+          },
         ),
       ],
     );

@@ -1,24 +1,33 @@
-import 'dart:math' as math;
 import 'dart:ui' show Size;
 import 'package:flutter/foundation.dart';
 import '../models/bounding_box.dart';
 import '../models/parking_session.dart';
 
-/// Penyimpanan lokal (in-memory) sesi parkir dari hasil scan.
-/// Kalau backend nanti punya endpoint daftar parkir/riwayat, ganti isi
-/// class ini dengan pemanggilan API; UI tidak perlu diubah.
+/// Penyimpanan state sesi verifikasi sepeda motor masuk/keluar secara real-time.
 class ParkingStore extends ChangeNotifier {
   ParkingStore._();
   static final ParkingStore instance = ParkingStore._();
 
-  static const capacity = 100;
   final List<ParkingSession> _active = [];
   final List<ParkingSession> _closed = []; // terbaru di depan
   int _seq = 0;
+  int _totalMasuk = 0;
+  int _totalKeluar = 0;
+  bool _scannerTabActive = true;
 
   List<ParkingSession> get active => List.unmodifiable(_active);
   List<ParkingSession> get closed => List.unmodifiable(_closed);
   int get activeCount => _active.length;
+  int get sedangDiDalam => _active.length;
+  int get totalMasuk => _totalMasuk;
+  int get totalKeluar => _totalKeluar;
+  bool get scannerTabActive => _scannerTabActive;
+
+  void setScannerTabActive(bool active) {
+    if (_scannerTabActive == active) return;
+    _scannerTabActive = active;
+    notifyListeners();
+  }
 
   static String _key(String p) => p.replaceAll(RegExp(r'\s+'), '').toUpperCase();
 
@@ -29,24 +38,31 @@ class ParkingStore extends ChangeNotifier {
     return null;
   }
 
-  ParkingSession _create(String plate, DateTime t) {
+  ParkingSession _create(String plate, DateTime t, {String? ticketCode}) {
     _seq++;
-    return ParkingSession(id: 'TRX-${98820 + _seq}', plate: plate, entryTime: t)..seq = _seq;
+    return ParkingSession(
+      id: (ticketCode != null && ticketCode.isNotEmpty) ? ticketCode : 'PK-${1000 + _seq}',
+      plate: plate,
+      entryTime: t,
+    )..seq = _seq;
   }
 
   ParkingSession recordEntry({
     required String plate,
     required DateTime time,
+    String? ticketCode,
     String? imagePath,
     List<BoundingBox> boxes = const [],
     Size? size,
     double? plateScore,
     bool manual = false,
     String? note,
+    int? serverTotalMasuk,
+    int? serverTotalKeluar,
   }) {
     final old = findActive(plate);
     if (old != null) _active.remove(old);
-    final s = _create(plate, time)
+    final s = _create(plate, time, ticketCode: ticketCode)
       ..entryImage = imagePath
       ..entryBoxes = boxes
       ..entrySize = size
@@ -54,6 +70,16 @@ class ParkingStore extends ChangeNotifier {
       ..manual = manual
       ..note = note;
     _active.add(s);
+
+    if (serverTotalMasuk != null) {
+      _totalMasuk = serverTotalMasuk;
+    } else {
+      _totalMasuk++;
+    }
+    if (serverTotalKeluar != null) {
+      _totalKeluar = serverTotalKeluar;
+    }
+
     notifyListeners();
     return s;
   }
@@ -61,6 +87,7 @@ class ParkingStore extends ChangeNotifier {
   ParkingSession recordExit({
     required String plate,
     required DateTime time,
+    String? ticketCode,
     String? imagePath,
     List<BoundingBox> boxes = const [],
     Size? size,
@@ -68,15 +95,16 @@ class ParkingStore extends ChangeNotifier {
     double? faceMatch,
     bool manual = false,
     String? note,
+    int? serverTotalMasuk,
+    int? serverTotalKeluar,
   }) {
     var s = findActive(plate);
     if (s != null) {
       _active.remove(s);
     } else {
-      s = _create(plate, time)
+      s = _create(plate, time, ticketCode: ticketCode)
         ..entryKnown = false
-        ..note = 'Tiket masuk tidak tercatat di aplikasi'
-        ..noteIsError = true;
+        ..note = 'Data masuk tercatat di server';
     }
     s
       ..exitTime = time
@@ -93,24 +121,41 @@ class ParkingStore extends ChangeNotifier {
         ..noteIsError = false;
     }
     _closed.insert(0, s);
+
+    if (serverTotalMasuk != null) {
+      _totalMasuk = serverTotalMasuk;
+    }
+    if (serverTotalKeluar != null) {
+      _totalKeluar = serverTotalKeluar;
+    } else {
+      _totalKeluar++;
+    }
+
     notifyListeners();
     return s;
   }
 
-  /// Percobaan keluar ditolak (wajah tidak cocok / ditutup petugas).
-  /// Kendaraan aslinya tetap tercatat parkir aktif.
+  /// Percobaan keluar gagal sampai 3x (wajah / plat berbeda) -> catat insiden alarm.
+  /// Sepeda asli yang terdaftar tetap berada di daftar sedang di dalam.
   ParkingSession recordRejected({
     required String plate,
+    String? detectedPlate,
+    String? mismatchType,
     required DateTime time,
+    String? ticketCode,
     String? imagePath,
     List<BoundingBox> boxes = const [],
     Size? size,
     double? plateScore,
     double? faceMatch,
     required String note,
+    int? serverTotalMasuk,
+    int? serverTotalKeluar,
   }) {
     final reg = findActive(plate);
-    final s = _create(plate, reg?.entryTime ?? time)
+    final s = _create(plate, reg?.entryTime ?? time, ticketCode: ticketCode)
+      ..detectedPlate = detectedPlate
+      ..mismatchType = mismatchType
       ..entryKnown = reg != null
       ..entryImage = reg?.entryImage
       ..entryBoxes = reg?.entryBoxes ?? const []
@@ -126,11 +171,29 @@ class ParkingStore extends ChangeNotifier {
       ..note = note
       ..noteIsError = true;
     _closed.insert(0, s);
+
+    if (serverTotalMasuk != null) _totalMasuk = serverTotalMasuk;
+    if (serverTotalKeluar != null) _totalKeluar = serverTotalKeluar;
+
     notifyListeners();
     return s;
   }
 
-  /// Mengisi data contoh (lihat core/demo_data.dart).
+  void syncFromDashboard(Map<String, dynamic> data) {
+    final m = (data['total_masuk'] as num?)?.toInt();
+    final k = (data['total_keluar'] as num?)?.toInt();
+    var changed = false;
+    if (m != null && m != _totalMasuk) {
+      _totalMasuk = m;
+      changed = true;
+    }
+    if (k != null && k != _totalKeluar) {
+      _totalKeluar = k;
+      changed = true;
+    }
+    if (changed) notifyListeners();
+  }
+
   void loadDemo({required List<ParkingSession> active, required List<ParkingSession> closed}) {
     _active
       ..clear()
@@ -138,7 +201,19 @@ class ParkingStore extends ChangeNotifier {
     _closed
       ..clear()
       ..addAll(closed);
+    final doneCount = closed.where((s) => s.status == SessionStatus.done).length;
+    _totalMasuk = active.length + doneCount;
+    _totalKeluar = doneCount;
     _seq = 100;
+    notifyListeners();
+  }
+
+  void clearAll() {
+    _active.clear();
+    _closed.clear();
+    _totalMasuk = 0;
+    _totalKeluar = 0;
+    _seq = 0;
     notifyListeners();
   }
 
@@ -151,32 +226,10 @@ class ParkingStore extends ChangeNotifier {
   int get doneToday => _closed.where((s) => s.status == SessionStatus.done && _today(s.closedAt)).length;
   int get rejectedToday => _closed.where((s) => s.status == SessionStatus.rejected && _today(s.closedAt)).length;
 
-  int get revenueToday {
-    var sum = 0;
-    for (final s in _closed) {
-      final d = s.duration;
-      if (s.status == SessionStatus.done && d != null && _today(s.closedAt)) sum += tariffValue(d);
-    }
-    return sum;
-  }
-
-  Duration get averageParking {
-    if (_active.isEmpty) return Duration.zero;
-    final now = DateTime.now();
-    final total = _active.fold<int>(0, (a, s) => a + now.difference(s.entryTime).inMinutes);
-    return Duration(minutes: total ~/ _active.length);
-  }
-
   // ---- format ----
-  static int tariffValue(Duration d) => math.max(1, (d.inMinutes / 60).ceil()) * 2000; // Rp 2.000/jam
-  static String tariffFor(Duration d) => rupiah(tariffValue(d));
-
-  static String rupiah(int v) =>
-      'Rp ${v.toString().replaceAllMapped(RegExp(r'(\d)(?=(\d{3})+$)'), (m) => '${m[1]}.')}';
-
-  static String _2(int n) => n.toString().padLeft(2, '0');
-  static String hhmm(DateTime t) => '${_2(t.hour)}:${_2(t.minute)}';
-  static String hhmmss(DateTime t) => '${_2(t.hour)}:${_2(t.minute)}:${_2(t.second)}';
+  static String _two(int n) => n.toString().padLeft(2, '0');
+  static String hhmm(DateTime t) => '${_two(t.hour)}:${_two(t.minute)}';
+  static String hhmmss(DateTime t) => '${_two(t.hour)}:${_two(t.minute)}:${_two(t.second)}';
   static String hm(DateTime t) => '${hhmm(t)} WIB';
 
   static const _months = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];

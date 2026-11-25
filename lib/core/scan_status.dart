@@ -1,21 +1,19 @@
 import '../models/bounding_box.dart';
 import '../models/parking_record.dart';
 
-enum ScanPhase { success, retrying, manual, alarm }
+enum ScanPhase { success, retrying, mismatchRetry, manual, alarm }
 
-/// Menerjemahkan field `status` dari backend ke fase tampilan.
-/// !! SESUAIKAN kata kunci di bawah dengan nilai status yang
-/// sebenarnya dikirim backend (tanyakan ke temanmu). !!
+/// Menerjemahkan field `status` dari backend FastAPI ke fase tampilan.
 class ScanStatus {
-  // ALARM = wajah saat keluar TIDAK cocok dengan saat masuk.
-  static const _alarmKeys = ['MISMATCH', 'ALARM', 'NOT_MATCH', 'FACE_DIFF', 'STOLEN'];
-  // MANUAL = perlu keputusan petugas.
+  static const _alarmKeys = ['ALARM', 'REJECTED_MISMATCH', 'STOLEN'];
+  static const _mismatchRetryKeys = ['MISMATCH_RETRY'];
   static const _manualKeys = ['MANUAL', 'DENIED', 'REJECT', 'UNREGISTERED', 'NOT_FOUND'];
   static const _retryKeys = ['SCANNING', 'NO_FACE', 'FACE_NOT', 'MASK', 'HELMET', 'RETRY', 'UNKNOWN'];
-  static const _successKeys = ['SUCCESS', 'OPEN', 'MATCH', 'VALID', 'GRANTED', 'OK'];
+  static const _successKeys = ['ENTRY_SUCCESS', 'EXIT_SUCCESS', 'SUCCESS', 'OPEN', 'MATCH', 'VALID', 'GRANTED', 'OK'];
 
   static ScanPhase phaseOf(String status) {
     final s = status.toUpperCase();
+    if (_mismatchRetryKeys.any(s.contains)) return ScanPhase.mismatchRetry;
     if (_alarmKeys.any(s.contains)) return ScanPhase.alarm;
     if (_manualKeys.any(s.contains)) return ScanPhase.manual;
     if (_retryKeys.any(s.contains)) return ScanPhase.retrying;
@@ -39,7 +37,8 @@ double? _bestConfidence(List<BoundingBox> boxes, List<String> keys) {
 extension ParkingRecordX on ParkingRecord {
   ScanPhase get phase => ScanStatus.phaseOf(status);
   bool get hasPlate => plateNumber.trim().isNotEmpty && plateNumber.trim() != '-';
+  bool get isEntryResult => status.toUpperCase().contains('ENTRY') || gateMode.toUpperCase() == 'IN';
   DateTime get time => DateTime.tryParse(timestamp) ?? DateTime.now();
-  double? get faceScore => _bestConfidence(boxes, ['face', 'wajah']);
+  double? get faceScore => similarityScore ?? _bestConfidence(boxes, ['face', 'wajah']);
   double? get plateScore => _bestConfidence(boxes, ['plate', 'plat']);
 }

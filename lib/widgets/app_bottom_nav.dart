@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../core/app_colors.dart';
+import '../core/app_theme.dart';
 
 class AppBottomNav extends StatelessWidget {
   final int index;
@@ -11,14 +12,15 @@ class AppBottomNav extends StatelessWidget {
   Widget build(BuildContext context) {
     final items = [
       (Icons.qr_code_scanner_rounded, 'Scanner', 0),
-      (Icons.two_wheeler_rounded, 'Parkir Aktif', activeCount),
+      (Icons.dashboard_rounded, 'Dashboard', activeCount),
       (Icons.history_rounded, 'Riwayat', 0),
     ];
     return Container(
-      padding: EdgeInsets.only(top: 8, bottom: MediaQuery.of(context).padding.bottom + 8),
-      decoration: BoxDecoration(color: Colors.white, boxShadow: [
-        BoxShadow(color: AppColors.primary.withOpacity(.08), blurRadius: 16, offset: const Offset(0, -4)),
-      ]),
+      padding: EdgeInsets.only(top: 10, bottom: MediaQuery.of(context).padding.bottom + 10),
+      decoration: const BoxDecoration(
+        color: AppColors.elevated,
+        border: Border(top: BorderSide(color: AppColors.border, width: 2)),
+      ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceAround,
         children: [
@@ -29,29 +31,52 @@ class AppBottomNav extends StatelessWidget {
               child: Column(mainAxisSize: MainAxisSize.min, children: [
                 Stack(clipBehavior: Clip.none, children: [
                   AnimatedContainer(
-                    duration: const Duration(milliseconds: 200),
-                    padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 7),
+                    duration: AppTheme.bouncyDuration,
+                    curve: AppTheme.bouncyCurve,
+                    transform: Matrix4.translationValues(0, index == i ? -2 : 0, 0),
+                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
                     decoration: BoxDecoration(
-                      color: index == i ? AppColors.pink : Colors.transparent,
-                      borderRadius: BorderRadius.circular(20),
+                      color: index == i ? AppColors.primary : AppColors.card,
+                      borderRadius: BorderRadius.circular(999),
+                      border: Border.all(
+                        color: index == i ? AppColors.primaryShadow : AppColors.border,
+                        width: 2,
+                      ),
+                      boxShadow: index == i
+                          ? const [BoxShadow(color: AppColors.primaryShadow, offset: Offset(0, 3), blurRadius: 0)]
+                          : null,
                     ),
-                    child: Icon(items[i].$1, size: 22, color: index == i ? AppColors.pinkDark : AppColors.textMuted),
+                    child: Icon(
+                      items[i].$1,
+                      size: 21,
+                      color: index == i ? Colors.white : AppColors.textMuted,
+                    ),
                   ),
                   if (items[i].$3 > 0)
                     Positioned(
-                      right: 2,
-                      top: -4,
+                      right: -2,
+                      top: -5,
                       child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
-                        decoration: BoxDecoration(color: AppColors.pinkDark, borderRadius: BorderRadius.circular(10)),
-                        child: Text('${items[i].$3}', style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.w700)),
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: AppColors.peach,
+                          borderRadius: BorderRadius.circular(999),
+                          border: Border.all(color: AppColors.peachShadow, width: 1.5),
+                        ),
+                        child: Text(
+                          '${items[i].$3}',
+                          style: const TextStyle(color: AppColors.peachInk, fontSize: 9.5, fontWeight: FontWeight.w800),
+                        ),
                       ),
                     ),
                 ]),
-                const SizedBox(height: 3),
-                Text(items[i].$2,
-                    style: TextStyle(fontSize: 11, fontWeight: index == i ? FontWeight.w700 : FontWeight.w500,
-                        color: index == i ? AppColors.primaryDark : AppColors.textMuted)),
+                const SizedBox(height: 5),
+                Text(
+                  items[i].$2,
+                  style: index == i
+                      ? AppTheme.heading(size: 12, color: AppColors.primaryDark)
+                      : AppTheme.body(size: 11, w: FontWeight.w600, color: AppColors.textMuted, height: 1.2),
+                ),
               ]),
             ),
         ],

@@ -1,15 +1,19 @@
 import 'package:flutter/material.dart';
 import '../core/app_colors.dart';
+import '../core/app_theme.dart';
 import '../models/bounding_box.dart';
 import '../models/parking_session.dart';
+import '../services/alarm_sound_service.dart';
 import '../services/parking_store.dart';
 import 'app_card.dart';
 import 'snapshot_thumb.dart';
 
-/// Tampilan alarm saat wajah keluar TIDAK cocok dengan saat masuk.
-/// Portal terkunci total, tombol buka manual dinonaktifkan.
+/// Panel alarm saat wajah atau plat nomor keluar tidak cocok hingga 3x deteksi.
 class AlarmPanel extends StatelessWidget {
   final ParkingSession? registered;
+  final String registeredPlate;
+  final String detectedPlate;
+  final String mismatchType;
   final String? currentImage;
   final List<BoundingBox> currentBoxes;
   final Size? currentSize;
@@ -19,6 +23,9 @@ class AlarmPanel extends StatelessWidget {
   const AlarmPanel({
     super.key,
     required this.registered,
+    required this.registeredPlate,
+    required this.detectedPlate,
+    required this.mismatchType,
     required this.currentImage,
     required this.currentBoxes,
     required this.currentSize,
@@ -27,50 +34,111 @@ class AlarmPanel extends StatelessWidget {
     required this.onDismiss,
   });
 
+  String get _reasonTitle {
+    if (mismatchType == 'PLATE_MISMATCH') return 'Plat Nomor Berbeda (3x Cek)!';
+    if (mismatchType == 'FACE_AND_PLATE_MISMATCH') return 'Wajah & Plat Berbeda (3x Cek)!';
+    return 'Wajah Berbeda (3x Cek)!';
+  }
+
+  String get _reasonDesc {
+    if (mismatchType == 'PLATE_MISMATCH') {
+      return 'Pengendara tercatat masuk dengan plat $registeredPlate, tapi pas keluar terdeteksi plat $detectedPlate.';
+    }
+    if (mismatchType == 'FACE_AND_PLATE_MISMATCH') {
+      return 'Selama 3x pemeriksaan beruntun, wajah dan plat ($detectedPlate) tidak cocok dengan data masuk ($registeredPlate).';
+    }
+    return 'Wajah pengendara berbeda dengan foto saat motor ($registeredPlate) pertama kali masuk.';
+  }
+
   @override
   Widget build(BuildContext context) {
     final reg = registered;
     return Column(children: [
       AppCard(
-        color: const Color(0xFFFFE3E3),
-        borderColor: AppColors.danger.withOpacity(.35),
+        color: AppColors.dangerBg,
+        borderColor: AppColors.dangerBorder,
+        shadowColor: AppColors.dangerBorder,
         child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          const CircleAvatar(radius: 20, backgroundColor: AppColors.danger, child: Icon(Icons.notifications_active_rounded, color: Colors.white, size: 20)),
+          Container(
+            width: 42,
+            height: 42,
+            decoration: BoxDecoration(
+              color: AppColors.danger,
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: const Icon(Icons.notifications_active_rounded, color: Colors.white, size: 22),
+          ),
           const SizedBox(width: 12),
-          const Expanded(
+          Expanded(
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text('Alarm Aktif!', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 15, color: AppColors.danger)),
-              SizedBox(height: 3),
-              Text('Wajah pengendara tidak sama dengan saat kendaraan masuk.',
-                  style: TextStyle(fontSize: 12.5, height: 1.4, color: Color(0xFF8A2A2A))),
+              Text(_reasonTitle, style: AppTheme.heading(size: 16, color: AppColors.danger)),
+              const SizedBox(height: 4),
+              Text(_reasonDesc, style: AppTheme.body(size: 12.5, color: AppColors.danger, height: 1.5)),
             ]),
           ),
         ]),
       ),
       const SizedBox(height: 12),
-      AppCard(
-        color: AppColors.card,
-        child: const Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          CircleAvatar(radius: 20, backgroundColor: Colors.white, child: Icon(Icons.lock_rounded, color: AppColors.primary, size: 20)),
-          SizedBox(width: 12),
-          Expanded(
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text('Portal Terkunci Total', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 14)),
-              SizedBox(height: 3),
-              Text('Portal terkunci, tidak bisa terbuka otomatis. Tombol buka manual dinonaktifkan.',
-                  style: TextStyle(fontSize: 12.5, height: 1.4, color: AppColors.textMuted)),
-            ]),
-          ),
-        ]),
+      ValueListenableBuilder<bool>(
+        valueListenable: AlarmSoundService.instance.isPlaying,
+        builder: (_, playing, __) => AppCard(
+          color: playing ? AppColors.dangerBg : AppColors.card,
+          borderColor: playing ? AppColors.dangerBorder : AppColors.border,
+          shadowColor: playing ? AppColors.dangerBorder : AppColors.cardShadow,
+          child: Row(children: [
+            Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                color: AppColors.elevated,
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: playing ? AppColors.dangerBorder : AppColors.border, width: 1.5),
+              ),
+              child: Icon(
+                playing ? Icons.volume_up_rounded : Icons.volume_off_rounded,
+                color: playing ? AppColors.danger : AppColors.primaryDark,
+                size: 20,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text(
+                  playing ? 'Sirine Alarm Berbunyi!' : 'Sirine Alarm Dimatikan',
+                  style: AppTheme.heading(size: 14, color: AppColors.textDark),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  playing ? 'Tap tombol untuk hentikan suara.' : 'Tap untuk bunyikan ulang.',
+                  style: AppTheme.body(size: 11.5, color: AppColors.textMuted, height: 1.3),
+                ),
+              ]),
+            ),
+            const SizedBox(width: 8),
+            SquishyButton(
+              label: playing ? 'Matikan Suara' : 'Bunyikan',
+              variant: playing ? SquishyVariant.secondary : SquishyVariant.danger,
+              fullWidth: false,
+              compact: true,
+              onPressed: () {
+                if (playing) {
+                  AlarmSoundService.instance.stopAlarm();
+                } else {
+                  AlarmSoundService.instance.startAlarm();
+                }
+              },
+            ),
+          ]),
+        ),
       ),
       const SizedBox(height: 12),
       AppCard(
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          const Row(children: [
-            Icon(Icons.compare_rounded, size: 18, color: AppColors.danger),
-            SizedBox(width: 8),
-            Expanded(child: Text('Komparasi Snapshot Wajah', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 14))),
-            Pill('Selisih Signifikan', bg: Color(0xFFFFE0E0), fg: AppColors.danger),
+          Row(children: [
+            const Icon(Icons.compare_rounded, size: 18, color: AppColors.danger),
+            const SizedBox(width: 8),
+            Expanded(child: Text('Bandingkan Data Masuk & Keluar', style: AppTheme.heading(size: 14.5, color: AppColors.textDark))),
+            const Pill('3x Berbeda', bg: AppColors.dangerBg, fg: AppColors.danger, borderColor: AppColors.dangerBorder),
           ]),
           const SizedBox(height: 12),
           Row(children: [
@@ -81,10 +149,10 @@ class AlarmPanel extends StatelessWidget {
                   boxes: reg?.entryBoxes ?? const [],
                   imageSize: reg?.entrySize,
                   height: 130,
-                  caption: reg == null ? 'Tidak tersimpan' : '${ParkingStore.hhmmss(reg.entryTime)} Masuk',
+                  caption: reg == null ? 'Masuk: $registeredPlate' : '${ParkingStore.hhmmss(reg.entryTime)} Masuk',
                 ),
                 const SizedBox(height: 6),
-                const Text('Pengendara Terdaftar', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700)),
+                Text('Terdaftar: $registeredPlate', style: AppTheme.body(size: 11.5, w: FontWeight.w700, color: AppColors.textDark, height: 1.2)),
               ]),
             ),
             const SizedBox(width: 10),
@@ -99,44 +167,47 @@ class AlarmPanel extends StatelessWidget {
                   caption: '${ParkingStore.hhmmss(time)} Keluar',
                 ),
                 const SizedBox(height: 6),
-                const Text('Pengendara Saat Ini', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: AppColors.danger)),
+                Text('Terdeteksi: $detectedPlate', style: AppTheme.body(size: 11.5, w: FontWeight.w700, color: AppColors.danger, height: 1.2)),
               ]),
             ),
           ]),
           const SizedBox(height: 12),
           Container(
             padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(color: AppColors.card.withOpacity(.7), borderRadius: BorderRadius.circular(14)),
-            child: const Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            decoration: BoxDecoration(
+              color: AppColors.butter,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: AppColors.butterShadow, width: 1.5),
+            ),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               Row(children: [
-                Icon(Icons.info_outline_rounded, size: 16, color: AppColors.primaryDark),
-                SizedBox(width: 6),
-                Text('Instruksi Prosedural Petugas:', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 12)),
+                const Icon(Icons.info_outline_rounded, size: 16, color: AppColors.butterInk),
+                const SizedBox(width: 6),
+                Text('Catatan untuk Petugas:', style: AppTheme.heading(size: 13, color: AppColors.butterInk)),
               ]),
-              SizedBox(height: 6),
+              const SizedBox(height: 4),
               Text(
-                'Pengendara berbeda dengan saat masuk. Hubungi petugas keamanan untuk pemeriksaan fisik STNK dan KTP secara manual.',
-                style: TextStyle(fontSize: 12, height: 1.5, color: AppColors.textMuted),
+                'Tahan kendaraan sebentar ya. Cocokkan STNK, plat nomor, dan pengendara sebelum izin keluar diberikan.',
+                style: AppTheme.body(size: 12, color: AppColors.butterInk, height: 1.5),
               ),
             ]),
           ),
         ]),
       ),
-      const SizedBox(height: 12),
-      SizedBox(
-        width: double.infinity,
-        child: FilledButton.icon(
-          onPressed: onCallSecurity,
-          icon: const Icon(Icons.support_agent_rounded),
-          label: const Text('Panggil Tim Keamanan Lapangan'),
-          style: FilledButton.styleFrom(
-            backgroundColor: AppColors.pinkDark,
-            padding: const EdgeInsets.symmetric(vertical: 15),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          ),
-        ),
+      const SizedBox(height: 14),
+      SquishyButton(
+        label: 'Panggil Petugas Jaga',
+        icon: Icons.support_agent_rounded,
+        variant: SquishyVariant.danger,
+        onPressed: onCallSecurity,
       ),
-      TextButton(onPressed: onDismiss, child: const Text('Tutup alarm')),
+      const SizedBox(height: 10),
+      SquishyButton(
+        label: 'Matikan Alarm & Kembali',
+        icon: Icons.camera_alt_rounded,
+        variant: SquishyVariant.secondary,
+        onPressed: onDismiss,
+      ),
     ]);
   }
 }

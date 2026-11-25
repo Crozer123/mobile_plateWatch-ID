@@ -5,8 +5,7 @@ import '../widgets/result_scaffold.dart';
 import '../widgets/scan_images_row.dart';
 import '../widgets/staff_confirmation_sheet.dart';
 
-/// Halaman "Konfirmasi Petugas" setelah gagal verifikasi wajah 3x.
-/// Pop dengan: true = buka portal, false = tetap tutup.
+/// Halaman konfirmasi petugas jika diperlukan pengecekan manual.
 class StaffConfirmScreen extends StatelessWidget {
   final ParkingRecord record;
   final String imagePath;
@@ -28,15 +27,15 @@ class StaffConfirmScreen extends StatelessWidget {
         ScanImagesRow(
           path: imagePath,
           boxes: record.boxes,
-          faceText: '$maxAttempt\u00d7 Gagal Terdeteksi',
+          faceText: '$maxAttempt\u00d7 Belum Terbaca',
           faceOk: false,
           faceFailedMark: true,
-          plateText: record.hasPlate ? 'Plat Terverifikasi' : 'Plat Tidak Terbaca',
+          plateText: record.hasPlate ? 'Plat Terbaca' : 'Plat Belum Terbaca',
           plateOk: record.hasPlate,
         ),
         const SizedBox(height: 14),
         StaffConfirmationSheet(
-          plate: record.hasPlate ? record.plateNumber : 'kendaraan ini',
+          plate: record.hasPlate ? record.plateNumber : 'sepeda ini',
           failed: maxAttempt,
           maxAttempt: maxAttempt,
           isEntry: isEntry,
