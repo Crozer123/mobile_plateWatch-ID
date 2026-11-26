@@ -1,4 +1,6 @@
 from abc import ABC
+
+# from matplotlib.pylab import det
 import cv2
 import numpy as np
 import onnxruntime as ort
@@ -30,7 +32,10 @@ class BaseYoloDetector(ABC):
         outputs = self.session.run(None, {self.input_name: np.expand_dims(blob, axis=0)})[0][0]
 
         results = []
-        for x1, y1, x2, y2, score, _ in outputs:
+        for det in outputs:
+            if len(det) < 5:
+                continue
+            x1, y1, x2, y2, score = float(det[0]), float(det[1]), float(det[2]), float(det[3]), float(det[4])
             if score < self.conf_thresh:
                 continue
             x1 = max(0.0, (x1 - dw) / ratio)
